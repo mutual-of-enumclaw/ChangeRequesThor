@@ -1,7 +1,7 @@
 # Setup script for SolarWinds Change Creator
 # This script helps configure the NuGet authentication token
 
-Write-Host "SolarWinds Change Creator - Setup Script" -ForegroundColor Green
+Write-Host "ChangeRequesThor Change Creator - Setup Script" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host
 

@@ -1,28 +1,40 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using SolarWindsChangeCreator.Configuration;
-using SolarWindsChangeCreator.Models;
+using ChangeRequesThor.Configuration;
+using ChangeRequesThor.Models;
 using System.Text;
 using System.Text.Json;
 
-namespace SolarWindsChangeCreator.Services;
+namespace ChangeRequesThor.Services;
 
-public interface ISolarWindsService
+public interface IChangeAutomationService
 {
     Task<ChangeResponse?> CreateChangeTicketAsync(string releaseId, string repository, string branch);
 }
 
-public class SolarWindsService : ISolarWindsService
+public class SolarWindsService : IChangeAutomationService
 {
     private readonly HttpClient _httpClient;
     private readonly SolarWindsSettings _settings;
     private readonly ILogger<SolarWindsService> _logger;
+    private readonly IJiraService _jiraService;
+    private readonly IDescriptionEnhancementService _descriptionService;
+    private readonly IGitHubPipelineService _pipelineService;
 
-    public SolarWindsService(HttpClient httpClient, IOptions<SolarWindsSettings> settings, ILogger<SolarWindsService> logger)
+    public SolarWindsService(
+        HttpClient httpClient, 
+        IOptions<SolarWindsSettings> settings, 
+        ILogger<SolarWindsService> logger,
+        IJiraService jiraService,
+        IDescriptionEnhancementService descriptionService,
+        IGitHubPipelineService pipelineService)
     {
         _httpClient = httpClient;
         _settings = settings.Value;
         _logger = logger;
+        _jiraService = jiraService;
+        _descriptionService = descriptionService;
+        _pipelineService = pipelineService;
 
         // Set up HTTP client headers
         _httpClient.BaseAddress = new Uri(_settings.ServiceUrl);
@@ -34,7 +46,17 @@ public class SolarWindsService : ISolarWindsService
     {
         try
         {
-            var changeRequest = CreateChangeRequest(releaseId, repository, branch);
+            // Get Jira issue if available
+            var jiraIssueKey = _pipelineService.GetJiraIssueKey();
+            JiraIssue? jiraIssue = null;
+
+            if (!string.IsNullOrWhiteSpace(jiraIssueKey))
+            {
+                _logger.LogDebug("Attempting to fetch Jira issue: {JiraIssueKey}", jiraIssueKey);
+                jiraIssue = await _jiraService.GetIssueAsync(jiraIssueKey);
+            }
+
+            var changeRequest = await CreateChangeRequestAsync(releaseId, repository, branch, jiraIssue);
             var json = JsonSerializer.Serialize(changeRequest, new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -56,8 +78,8 @@ public class SolarWindsService : ISolarWindsService
                     PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
                 });
 
-                _logger.LogDebug("Successfully created change ticket {TicketNumber} (ID: {TicketId})", 
-                    changeResponse?.Number, changeResponse?.Id);
+                _logger.LogDebug("Successfully created change ticket {TicketNumber} (ID: {TicketId}) with Jira integration: {HasJira}", 
+                    changeResponse?.Number, changeResponse?.Id, jiraIssue != null);
 
                 return changeResponse;
             }
@@ -76,18 +98,27 @@ public class SolarWindsService : ISolarWindsService
         }
     }
 
-    private ChangeRequest CreateChangeRequest(string releaseId, string repository, string branch)
+    private async Task<ChangeRequest> CreateChangeRequestAsync(string releaseId, string repository, string branch, JiraIssue? jiraIssue)
     {
         var now = DateTime.UtcNow;
         var plannedStart = now.AddMinutes(30); // Start in 30 minutes
         var plannedEnd = now.AddHours(2); // End in 2 hours
 
+        // Build enhanced description
+        var originalDescription = BuildBasicDescription(releaseId, repository, branch);
+        var enhancedDescription = await _descriptionService.EnhanceDescriptionAsync(jiraIssue, originalDescription, releaseId, repository, branch);
+
+        // Use Jira summary for change name if available
+        var changeName = jiraIssue != null 
+            ? $"Production Deployment - {jiraIssue.Key}: {jiraIssue.Fields.Summary}" 
+            : $"Production Deployment - Release {releaseId}";
+
         return new ChangeRequest
         {
             Change = new Change
             {
-                Name = $"Production Deployment - Release {releaseId}",
-                Description = BuildDescription(releaseId, repository, branch),
+                Name = changeName.Length > 100 ? changeName.Substring(0, 97) + "..." : changeName, // Truncate if too long
+                Description = enhancedDescription,
                 Requester = new Requester
                 {
                     Email = _settings.DefaultRequestorEmail
@@ -110,7 +141,7 @@ public class SolarWindsService : ISolarWindsService
         };
     }
 
-    private static string BuildDescription(string releaseId, string repository, string branch)
+    private static string BuildBasicDescription(string releaseId, string repository, string branch)
     {
         var sb = new StringBuilder();
         sb.AppendLine("AUTOMATED PRODUCTION DEPLOYMENT");

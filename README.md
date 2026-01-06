@@ -1,6 +1,6 @@
-# SolarWinds Change Creator
+# Change Creator
 
-This application automatically creates SolarWinds change tickets for production deployments initiated through GitHub pipelines.
+This application automatically creates change tickets, presently using SolarWinds, for production deployments initiated through GitHub pipelines.
 
 ## Overview
 
@@ -8,7 +8,7 @@ The application is designed to run as part of a GitHub release pipeline. When a 
 
 1. Detect the production deployment environment
 2. Gather release information from environment variables
-3. Create a SolarWinds change ticket with deployment details
+3. Create a change ticket with deployment details
 4. Log the release ID and created ticket number
 
 ## Configuration
@@ -48,9 +48,9 @@ The application uses `appsettings.json` and `appsettings.Production.json` for co
 Add this step to your GitHub Actions workflow for production deployments:
 
 ```yaml
-- name: Create SolarWinds Change Ticket
+- name: Create Change Ticket
   run: |
-    dotnet run --project SolarWindsChangeCreator
+    dotnet run --project ChangeRequesThor
   env:
     DEPLOYMENT_ENVIRONMENT: PRD
     ASPNETCORE_ENVIRONMENT: Production
@@ -86,7 +86,7 @@ The application implements comprehensive logging:
 
 Example INFO log output:
 ```
-Release ID: v1.2.3, Created SolarWinds Change Ticket: CHG0012345
+Release ID: v1.2.3, Created Change Ticket: CHG0012345
 ```
 
 ## Error Handling

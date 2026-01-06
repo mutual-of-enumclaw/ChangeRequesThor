@@ -1,4 +1,4 @@
-namespace SolarWindsChangeCreator.Configuration;
+namespace ChangeRequesThor.Configuration;
 
 public class SolarWindsSettings
 {
@@ -10,14 +10,11 @@ public class SolarWindsSettings
     public string DefaultPriority { get; set; } = string.Empty;
 }
 
-public class GitHubSettings
+public class JiraSettings
 {
-    public string Repository { get; set; } = string.Empty;
-    public string Branch { get; set; } = string.Empty;
-}
-
-public class AppSettings
-{
-    public SolarWindsSettings SolarWinds { get; set; } = new();
-    public GitHubSettings GitHub { get; set; } = new();
+    public string BaseUrl { get; set; } = string.Empty;
+    public string ApiToken { get; set; } = string.Empty;
+    public string Username { get; set; } = string.Empty;
+    public bool EnableDescriptionEnhancement { get; set; } = true;
+    public int TimeoutSeconds { get; set; } = 30;
 }

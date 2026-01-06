@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace SolarWindsChangeCreator.Models;
+namespace ChangeRequesThor.Models;
 
 public class ChangeRequest
 {

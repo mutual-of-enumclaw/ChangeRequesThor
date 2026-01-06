@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
+using System.Text.RegularExpressions;
 
-namespace SolarWindsChangeCreator.Services;
+namespace ChangeRequesThor.Services;
 
 public interface IGitHubPipelineService
 {
@@ -8,11 +9,13 @@ public interface IGitHubPipelineService
     string GetRepository();
     string GetBranch();
     bool IsProductionDeployment();
+    string? GetJiraIssueKey();
 }
 
 public class GitHubPipelineService : IGitHubPipelineService
 {
     private readonly ILogger<GitHubPipelineService> _logger;
+    private static readonly Regex JiraKeyRegex = new(@"\b([A-Z]+-\d+)\b", RegexOptions.Compiled);
 
     public GitHubPipelineService(ILogger<GitHubPipelineService> logger)
     {
@@ -76,5 +79,33 @@ public class GitHubPipelineService : IGitHubPipelineService
 
         _logger.LogDebug("Is production deployment: {IsProduction} (Environment: {Environment})", isProduction, environment);
         return isProduction;
+    }
+
+    public string? GetJiraIssueKey()
+    {
+        // Try to extract Jira issue key from various sources
+        var sources = new[]
+        {
+            Environment.GetEnvironmentVariable("JIRA_ISSUE_KEY"),
+            Environment.GetEnvironmentVariable("GITHUB_HEAD_REF"),
+            Environment.GetEnvironmentVariable("GITHUB_REF_NAME"),
+            Environment.GetEnvironmentVariable("BRANCH_NAME"),
+            Environment.GetEnvironmentVariable("GITHUB_EVENT_HEAD_COMMIT_MESSAGE"),
+            Environment.GetEnvironmentVariable("GITHUB_EVENT_PULL_REQUEST_TITLE")
+        };
+
+        foreach (var source in sources.Where(s => !string.IsNullOrWhiteSpace(s)))
+        {
+            var match = JiraKeyRegex.Match(source!);
+            if (match.Success)
+            {
+                var jiraKey = match.Groups[1].Value;
+                _logger.LogDebug("Found Jira issue key: {JiraKey} from source: {Source}", jiraKey, source);
+                return jiraKey;
+            }
+        }
+
+        _logger.LogDebug("No Jira issue key found in environment variables");
+        return null;
     }
 }
